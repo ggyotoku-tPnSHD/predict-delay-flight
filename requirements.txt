@@ -1,6 +1,0 @@
-httpx
-pandas
-pyarrow
-boto3
-aiofiles
-
