@@ -1,4 +1,4 @@
-#!/home/akito/predict_delay_flight_portfolio/.venv/bin/python3
+#!/home/akito/predict-delay-flight/.venv/bin/python3
 # -*- coding: utf-8 -*-
 import re
 import sys
