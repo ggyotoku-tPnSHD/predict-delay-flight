@@ -4,3 +4,7 @@ pyarrow
 boto3
 aiofiles
 
+scikit-learn
+fastapi
+uvicorn
+joblib
