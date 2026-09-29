@@ -1,10 +1,12 @@
-httpx
-pandas
-pyarrow
-boto3
-aiofiles
-
-scikit-learn
-fastapi
-uvicorn
-joblib
+# Pinned: the model is a pickle, so the server must load it with the same library versions.
+aiofiles==25.1.0
+boto3==1.43.65
+fastapi==0.141.1
+httpx==0.28.1
+joblib==1.6.0
+numpy==2.5.1
+pandas==3.0.5
+pyarrow==25.0.0
+scikit-learn==1.9.1
+scipy==1.18.1
+uvicorn==0.54.0
