@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flight Delay Predictor</title>
+<meta name="description" content="Predicts the chance a US domestic flight arrives 15+ minutes late, trained on BTS on-time data.">
+<style>
+  :root {
+    color-scheme: light;
+    --surface-0: #f4f4f2;
+    --surface-1: #fcfcfb;
+    --border: #e1e0da;
+    --grid: #ebeae5;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #7a7973;
+    --accent: #2a78d6;
+    --accent-ink: #ffffff;
+    --bar: #2a78d6;
+    --bar-dim: #b9d2f1;
+    --ref: #52514e;
+    --warn: #b3261e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --surface-0: #111110;
+      --surface-1: #1a1a19;
+      --border: #2e2e2c;
+      --grid: #262624;
+      --text-primary: #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted: #8f8e86;
+      --accent: #3987e5;
+      --bar: #3987e5;
+      --bar-dim: #2a3f5c;
+      --ref: #c3c2b7;
+      --warn: #f28b82;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --surface-0: #111110;
+    --surface-1: #1a1a19;
+    --border: #2e2e2c;
+    --grid: #262624;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted: #8f8e86;
+    --accent: #3987e5;
+    --bar: #3987e5;
+    --bar-dim: #2a3f5c;
+    --ref: #c3c2b7;
+    --warn: #f28b82;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--surface-0);
+    color: var(--text-primary);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 880px; margin: 0 auto; padding: 32px 16px 48px; }
+  h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .lede { color: var(--text-secondary); margin: 0 0 24px; }
+  .card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  form { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--text-secondary); }
+  select, input {
+    font: inherit; color: var(--text-primary);
+    background: var(--surface-0);
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 10px; min-width: 0;
+  }
+  button {
+    grid-column: 1 / -1;
+    font: inherit; font-weight: 600;
+    background: var(--accent); color: var(--accent-ink);
+    border: 0; border-radius: 8px; padding: 10px;
+    cursor: pointer;
+  }
+  button:disabled { opacity: 0.6; cursor: wait; }
+  .error { color: var(--warn); margin: 12px 0 0; }
+  .error:empty { display: none; }
+
+  .headline { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 24px; }
+  .hero { font-size: 56px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+  .hero-label { color: var(--text-secondary); }
+  .compare { color: var(--text-secondary); margin: 8px 0 0; }
+
+  h2 { font-size: 16px; margin: 0 0 4px; }
+  .sub { color: var(--text-muted); font-size: 13px; margin: 0 0 12px; }
+  .chart-wrap { position: relative; }
+  svg { display: block; width: 100%; height: auto; overflow: visible; }
+  svg text { fill: var(--text-muted); font-size: 11px; pointer-events: none; }
+  .tooltip {
+    position: absolute; pointer-events: none;
+    background: var(--surface-1); color: var(--text-primary);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 6px 8px; font-size: 12px; white-space: nowrap;
+    box-shadow: 0 2px 8px rgb(0 0 0 / 0.12);
+    transform: translate(-50%, -100%); margin-top: -8px;
+    display: none;
+  }
+  details { margin-top: 12px; font-size: 13px; color: var(--text-secondary); }
+  table { border-collapse: collapse; margin-top: 8px; font-variant-numeric: tabular-nums; }
+  td, th { padding: 2px 12px 2px 0; text-align: left; }
+
+  .about { color: var(--text-secondary); font-size: 13px; }
+  .about h2 { color: var(--text-primary); }
+  .about p { margin: 0 0 8px; }
+  .stats { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-bottom: 12px; }
+  .stats b { display: block; color: var(--text-primary); font-size: 18px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Flight Delay Predictor</h1>
+  <p class="lede">What are the odds your US domestic flight lands 15+ minutes late? The estimate comes from a model built on 1.6M real flights from the Bureau of Transportation Statistics.</p>
+
+  <section class="card">
+    <form id="form">
+      <label>Airline <select id="airline" required></select></label>
+      <label>From <select id="origin" required></select></label>
+      <label>To <select id="dest" required></select></label>
+      <label>Date <input id="date" type="date" required></label>
+      <label>Departure <input id="time" type="time" value="08:00" required></label>
+      <button id="submit" type="submit">Predict delay</button>
+    </form>
+    <p class="error" id="error" role="alert"></p>
+  </section>
+
+  <section class="card" id="result" hidden>
+    <div class="headline">
+      <div class="hero" id="hero"></div>
+      <div class="hero-label" id="hero-label"></div>
+    </div>
+    <p class="compare" id="compare"></p>
+  </section>
+
+  <section class="card" id="chart-card" hidden>
+    <h2>Delay chance by departure time</h2>
+    <p class="sub" id="chart-sub"></p>
+    <div class="chart-wrap">
+      <svg id="chart" role="img" aria-labelledby="chart-sub"></svg>
+      <div class="tooltip" id="tooltip"></div>
+    </div>
+    <details>
+      <summary>Show as table</summary>
+      <table id="table"><thead><tr><th>Departure</th><th>Delay chance</th></tr></thead><tbody></tbody></table>
+    </details>
+  </section>
+
+  <section class="card about">
+    <h2>About the model</h2>
+    <div class="stats" id="stats"></div>
+    <p>A logistic regression using airline, route, distance, day of week and departure hour. It was trained on January–February 2026 and tested on March 2026, flights it never saw.</p>
+    <p>This is an early baseline: it ranks flights better than chance but has no weather or airport congestion data yet. <a href="/docs">API docs</a></p>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const pct = (p) => `${Math.round(p * 100)}%`;
+const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+let routes = {};
+let lastChart = null;
+
+const hourName = (h) => `${h % 12 || 12} ${h < 12 || h === 24 ? "AM" : "PM"}`;
+function blockLabel(blk) {
+  if (blk === "0001-0559") return "<6a";
+  const h = Number(blk.slice(0, 2));
+  return `${h % 12 || 12}${h < 12 ? "a" : "p"}`;
+}
+function blockName(blk) {
+  if (blk === "0001-0559") return "before 6 AM";
+  const h = Number(blk.slice(0, 2));
+  return `${hourName(h)}–${hourName(h + 1)}`;
+}
+
+function fillSelect(sel, items, selected) {
+  sel.replaceChildren(...items.map(([value, text]) => new Option(text, value, false, value === selected)));
+}
+
+function updateDests() {
+  const current = $("dest").value;
+  const dests = routes[$("origin").value] || [];
+  fillSelect($("dest"), dests.map((d) => [d, d]), dests.includes(current) ? current : dests.includes("JFK") ? "JFK" : dests[0]);
+}
+
+async function init() {
+  const tomorrow = new Date(Date.now() + 864e5);
+  $("date").value = tomorrow.toISOString().slice(0, 10);
+  const meta = await (await fetch("/meta")).json();
+  routes = meta.routes;
+  fillSelect($("airline"), meta.airlines.map((a) => [a.code, `${a.name} (${a.code})`]), "AA");
+  fillSelect($("origin"), Object.keys(routes).map((o) => [o, o]), "LAX");
+  updateDests();
+  const m = meta.model;
+  $("stats").innerHTML = `
+    <div><b>${(m.train_rows / 1e6).toFixed(2)}M</b>training flights</div>
+    <div><b>${(m.test_rows / 1e3).toFixed(0)}K</b>test flights</div>
+    <div><b>${m.test_auc.toFixed(3)}</b>test AUC</div>
+    <div><b>${pct(m.test_delay_rate)}</b>flights delayed in test month</div>`;
+}
+
+function renderChart(byBlock, selectedBlock, baseRate) {
+  const svg = $("chart");
+  const entries = Object.entries(byBlock);
+  lastChart = [byBlock, selectedBlock, baseRate];
+  // Draw at the container's real pixel width so text stays 11px on phones.
+  const W = Math.max(280, svg.parentElement.clientWidth), H = 240, padL = 36, padR = 8, padT = 12, padB = 28;
+  const max = Math.max(0.5, ...entries.map(([, p]) => p), baseRate) * 1.1;
+  const y = (p) => padT + (1 - p / max) * (H - padT - padB);
+  const step = (W - padL - padR) / entries.length;
+  const barW = step - 2;  // 2px surface gap between bars
+  const labelEvery = step >= 36 ? 3 : 6;
+  const selIdx = entries.findIndex(([blk]) => blk === selectedBlock);
+  const ns = "http://www.w3.org/2000/svg";
+  const el = (tag, attrs, text) => {
+    const n = document.createElementNS(ns, tag);
+    for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+    if (text != null) n.textContent = text;
+    return n;
+  };
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.replaceChildren();
+
+  for (let t = 0; t <= max; t += 0.1) {
+    svg.append(el("line", { x1: padL, x2: W - padR, y1: y(t), y2: y(t), stroke: "var(--grid)" }));
+    svg.append(el("text", { x: padL - 6, y: y(t) + 4, "text-anchor": "end" }, pct(t)));
+  }
+
+  const tip = $("tooltip");
+  entries.forEach(([blk, p], i) => {
+    const x = padL + i * step + 1;
+    const top = y(p), h = y(0) - top, r = Math.min(4, h);
+    const selected = blk === selectedBlock;
+    // Rounded top corners only; the bar stays anchored to the baseline.
+    const d = `M${x},${y(0)} V${top + r} Q${x},${top} ${x + r},${top} H${x + barW - r} Q${x + barW},${top} ${x + barW},${top + r} V${y(0)} Z`;
+    svg.append(el("path", { d, fill: selected ? "var(--bar)" : "var(--bar-dim)" }));
+    // Skip regular labels that would collide with the highlighted one.
+    if (selected || (i % labelEvery === 0 && Math.abs(i - selIdx) * step >= 32)) {
+      svg.append(el("text", { x: x + barW / 2, y: H - 8, "text-anchor": "middle",
+        style: selected ? "fill: var(--text-primary); font-weight: 600" : "" }, blockLabel(blk)));
+    }
+    // Full-height hit target so thin bars are easy to hover.
+    const hit = el("rect", { x: x - 1, y: padT, width: step, height: y(0) - padT, fill: "transparent" });
+    hit.addEventListener("pointerenter", () => {
+      tip.innerHTML = `<b>${blockName(blk)}</b> · ${pct(p)}`;
+      tip.style.left = `${Math.min(Math.max(x + barW / 2, 60), W - 60)}px`;
+      tip.style.top = `${top}px`;
+      tip.style.display = "block";
+    });
+    hit.addEventListener("pointerleave", () => (tip.style.display = "none"));
+    svg.append(hit);
+  });
+
+  svg.append(el("line", { x1: padL, x2: W - padR, y1: y(baseRate), y2: y(baseRate),
+    stroke: "var(--ref)", "stroke-width": 1.5, "stroke-dasharray": "4 4" }));
+  // Early-morning bars sit lowest, so the left end of the line has room for its label.
+  svg.append(el("text", { x: padL + 4, y: y(baseRate) - 6,
+    style: "fill: var(--text-secondary)" }, `average ${pct(baseRate)}`));
+
+  $("table").tBodies[0].replaceChildren(...entries.map(([blk, p]) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${blockName(blk)}</td><td>${pct(p)}</td>`;
+    return tr;
+  }));
+}
+
+$("origin").addEventListener("change", updateDests);
+window.addEventListener("resize", () => lastChart && renderChart(...lastChart));
+$("form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("error").textContent = "";
+  $("submit").disabled = true;
+  const [hh, mm] = $("time").value.split(":").map(Number);
+  const body = {
+    airline: $("airline").value, origin: $("origin").value, dest: $("dest").value,
+    flight_date: $("date").value, dep_time: hh * 100 + mm,
+  };
+  try {
+    const res = await fetch("/predict", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : "Invalid request");
+    const p = data.delay_probability, base = data.base_rate;
+    const ratio = p / base;
+    const day = DAYS[new Date(body.flight_date + "T12:00").getDay()];
+    $("hero").textContent = pct(p);
+    $("hero-label").textContent = `chance ${body.airline} ${data.route.replace("-", " → ")} arrives 15+ min late`;
+    $("compare").textContent = ratio > 1.15 ? `${ratio.toFixed(1)}× the average flight (${pct(base)}).`
+      : ratio < 0.85 ? `Lower than the average flight (${pct(base)}).`
+      : `About the same as the average flight (${pct(base)}).`;
+    const blocks = Object.entries(data.by_time_block);
+    const [bestBlk, bestP] = blocks.reduce((a, b) => (b[1] < a[1] ? b : a));
+    $("chart-sub").textContent = `${data.route.replace("-", " → ")} on ${body.airline}, ${day}s. Lowest: ${blockName(bestBlk)} at ${pct(bestP)}.`;
+    const selectedBlk = hh < 6 ? "0001-0559" : `${String(hh).padStart(2, "0")}00-${String(hh).padStart(2, "0")}59`;
+    // Unhide first: the chart sizes itself from the card's rendered width.
+    $("result").hidden = false;
+    $("chart-card").hidden = false;
+    renderChart(data.by_time_block, selectedBlk, base);
+  } catch (err) {
+    $("error").textContent = err.message;
+  } finally {
+    $("submit").disabled = false;
+  }
+});
+
+init().catch(() => ($("error").textContent = "Could not reach the prediction service."));
+</script>
+</body>
+</html>
