@@ -5,6 +5,7 @@ from pathlib import Path
 import pandas as pd
 
 from logging_config import setup_logging
+from storage import upload_dir
 
 log = logging.getLogger(__name__)
 
@@ -52,3 +53,6 @@ if __name__ == "__main__":
     setup_logging("transform")
     for zip_path in sorted(DATA_DIR.glob("On_time_*.zip")):
         zip_to_parquet(zip_path)
+    # Months already in S3 are skipped, so reruns only upload new data.
+    for part in sorted(PARQUET_DIR.glob("Year=*/Month=*")):
+        upload_dir(part, f"parquet/{part.relative_to(PARQUET_DIR).as_posix()}")

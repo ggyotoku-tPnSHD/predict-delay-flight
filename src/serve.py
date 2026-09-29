@@ -6,7 +6,11 @@ import pandas as pd
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
+from storage import download_dir
 from train import FEATURES, MODEL_DIR, MODEL_PATH, ROUTES_PATH
+
+if not MODEL_PATH.exists():
+    download_dir("models", MODEL_DIR)
 
 app = FastAPI(title="Flight Delay Predictor")
 model = joblib.load(MODEL_PATH)

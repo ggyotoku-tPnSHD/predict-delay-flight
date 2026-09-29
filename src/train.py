@@ -11,6 +11,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 from logging_config import setup_logging
+from storage import upload_dir
 from transform import PARQUET_DIR
 
 log = logging.getLogger(__name__)
@@ -57,6 +58,7 @@ def train(test_month: int = 3) -> dict:
     routes = df.groupby(["Origin", "Dest"])["Distance"].first()
     ROUTES_PATH.write_text(json.dumps({f"{o}-{d}": v for (o, d), v in routes.items()}))
     (MODEL_DIR / "metrics.json").write_text(json.dumps(metrics, indent=2))
+    upload_dir(MODEL_DIR, "models", overwrite=True)
     log.info("train %s", metrics)
     return metrics
 
