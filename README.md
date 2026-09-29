@@ -2,7 +2,7 @@
 
 Predicts the chance a US domestic flight arrives 15+ minutes late, from 1.6M flights of Bureau of Transportation Statistics (BTS) on-time data.
 
-**Live demo:** _coming soon_
+**Live demo:** https://flight-delay-q0tu.onrender.com (free tier: the first load after idle takes ~30–50 s)
 
 ## Pipeline
 
