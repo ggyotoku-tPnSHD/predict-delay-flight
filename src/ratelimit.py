@@ -33,8 +33,12 @@ class SlidingWindow:
 
 
 def client_ip(request: Request) -> str:
-    # Behind Render's proxy the socket address is the proxy, so use the forwarded client IP.
-    # A caller can forge this header, which is why a global limit backs up the per-IP one.
+    # Render sits behind Cloudflare, which overwrites CF-Connecting-IP with the real client address.
+    # X-Forwarded-For is only a fallback: Render appends to it, so its first entry can be forged
+    # (verified on the live service), which is why a global limit backs up the per-IP one.
+    cf_ip = request.headers.get("cf-connecting-ip")
+    if cf_ip:
+        return cf_ip.strip()
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
         return forwarded.split(",")[0].strip()
