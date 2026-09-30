@@ -5,10 +5,11 @@ from pathlib import Path
 
 import joblib
 import pandas as pd
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
+from ratelimit import limiter
 from storage import download_dir
 from train import FEATURES, MODEL_DIR, MODEL_PATH, ROUTES_PATH
 
@@ -33,6 +34,10 @@ for key in sorted(routes):
     origin, dest = key.split("-")
     dests_by_origin[origin].append(dest)
 
+# Per-IP limits stop one visitor hammering the demo; global limits cap total load even if IPs are forged.
+predict_limit = limiter("PREDICT", per_ip=20, global_limit=300)
+meta_limit = limiter("META", per_ip=10, global_limit=200)
+
 
 class FlightRequest(BaseModel):
     airline: str = Field(examples=["AA"], description="IATA carrier code")
@@ -52,7 +57,7 @@ def index():
     return FileResponse(INDEX_HTML)
 
 
-@app.get("/meta")
+@app.get("/meta", dependencies=[Depends(meta_limit)])
 def meta():
     return {
         "airlines": [{"code": c, "name": AIRLINE_NAMES.get(c, c)} for c in airlines],
@@ -66,7 +71,7 @@ def health():
     return {"status": "ok", "model": metrics}
 
 
-@app.post("/predict")
+@app.post("/predict", dependencies=[Depends(predict_limit)])
 def predict(req: FlightRequest):
     route = f"{req.origin.upper()}-{req.dest.upper()}"
     if route not in routes:
